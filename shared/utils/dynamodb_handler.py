@@ -17,10 +17,11 @@ class DynamoDBHandler:
 
     def save(self, _data):
         _table = self._dynamodb.Table(self._table_name)
-        return _table.put_item(
+        _table.put_item(
             TableName=self._table_name,
             Item=_data
         )
+        return _data
 
     def find_by_id(self, _id, _key_name):
         _table = self._dynamodb.Table(self._table_name)

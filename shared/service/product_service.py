@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from decimal import Decimal
 
 from utils.dynamodb_handler import DynamoDBHandler
 
@@ -14,18 +15,15 @@ class ProductService:
         )
 
     def save_product(self, _product):
-        _params = {
+        return self._repository.save({
             'id': str(uuid.uuid4()),
             'timestamp': int(round(time.time() * 1000)),
-
             'name': _product['name'],
             'inventory': _product['inventory'],
-            'salesPrice': _product['salesPrice'],
-            'purchasePrice': _product['purchasePrice'],
+            'salesPrice': Decimal(str(_product['salesPrice'])),
+            'purchasePrice': Decimal(str(_product['purchasePrice'])),
             'code': _product['code']
-        }
-        self._repository.save(_params)
-        return _params
+        })
 
     def find_product_by_id(self, _product_id):
         return self._repository.find_by_id(_product_id, 'id')
