@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "simple-order-eventsourcing-cqrs-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1tar2xdp3r0js"
+s3_prefix = "simple-order-eventsourcing-cqrs-app"
+region = "sa-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "TABLEPRODUCT=\"Product\""

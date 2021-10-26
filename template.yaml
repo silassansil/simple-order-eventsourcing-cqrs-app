@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  simple-order-eventsourcing-cqrs-app
+
+  Sample SAM Template for simple-order-eventsourcing-cqrs-app
+
+Globals:
+  Function:
+    Timeout: 3
+
+Parameters:
+  TABLEPRODUCT:
+    Type: String
+    Default: Product
+  TABLEDAILYSUMMARY:
+    Type: String
+    Default: DailySummary
+  TABLEMONTHLYSUMMARY:
+    Type: String
+    Default: MonthlySummary
+  TABLEWEEKLYSUMMARY:
+    Type: String
+    Default: WeeklySummary
+
+Resources:
+  ##############################
+  ## Api Gateway setup
+  ##############################
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+
+  ##############################
+  ## Lambda Layers
+  ##############################
+  SharedModules:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: shared
+      CompatibleRuntimes:
+        - python3.8
+    Metadata:
+      BuildMethod: python3.8
+
+  ##############################
+  ## Functions
+  ##############################
+  ProductCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: product_create/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        ProductCreate:
+          Type: Api
+          Properties:
+            Path: /products
+            Method: post
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref ProductTable
+  OrderEventPublishFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: order_event_publish/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        OrderEventCreate:
+          Type: Api
+          Properties:
+            Path: /orders
+            Method: post
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductTable
+        - SSMParameterReadPolicy:
+            ParameterName: order/new-order-topic
+        - SNSPublishMessagePolicy:
+            TopicName: NewOrderCreated
+  ProductInvetoryUpdateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: product_inventory_update/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref SNSTopic
+            SqsSubscription: true
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductTable
+  DailySummaryGenerateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: daily_summary_generate/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref SNSTopic
+            SqsSubscription: true
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref DailySummaryTable
+  MonthlySummaryGenerateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: monthly_summary_generate/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref SNSTopic
+            SqsSubscription: true
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref MonthlySummaryTable
+  WeeklySummaryGenerateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: weekly_summary_generate/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref SharedModules
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref SNSTopic
+            SqsSubscription: true
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref WeeklySummaryTable
+
+  ##############################
+  ## DynamoDB
+  ##############################
+  ProductTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "timestamp"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "Product"
+  DailySummaryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "timestamp"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "DailySummary"
+  MonthlySummaryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "timestamp"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "MonthlySummary"
+  WeeklySummaryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+        - AttributeName: "timestamp"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "WeeklySummary"
+
+  ##############################
+  ## SNS
+  ##############################
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: NewOrderCreated
+
+  ##############################
+  ## SSM - Parameter Store
+  ##############################
+  SNSTopicArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /order/new-order-topic
+      Type: String
+      Value: !Ref SNSTopic
+      Description: SNS Arn topic used to publish when new orders were created.
+
+Outputs:
+  ApiGateway:
+    Description: "Base API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com"
